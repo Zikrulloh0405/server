@@ -1,71 +1,60 @@
-import { ApolloServer } from '@apollo/server';
-import { startStandaloneServer } from '@apollo/server/standalone';
-import jwt from "jsonwebtoken";
+import { ApolloServer } from "@apollo/server";
+import { startStandaloneServer } from "@apollo/server/standalone";
+import { userMethods } from "./db.js"; // Importing userMethods
 
-const SECRET_KEY = "mysecretkey";
+const typeDefs = ` 
+    type Query {
+      login(input: Credentials!): LoginResult
+    }
 
-const users = [{id : 1, userName : 'bob', password : 'qwerty'}];
+    input Credentials {
+      email: String!
+      password: String!
+    }
 
-const data = ["fdfhjdfjks", "fhjdhfjkdhf", "hfjkshfkj", "qazxseqq"]
+    union LoginResult = User | LoginError
 
-// A schema is a collection of type definitions (hence "typeDefs")
-// that together define the "shape" of queries that are executed against
-// your data.
-const typeDefs = `#graphql
-  type Query {
-    getAllData: [String]
-  }
-  type Mutation {
-    login(userName: String!, password: String!): String
-  }
+    type LoginError {
+      message: String!
+    }
+    
+    type User {
+      id: ID!
+      email: String!
+      password: String!
+      followers: [User]
+      following: [User]
+      profileImage: String
+    }
 `;
 
-
 const resolvers = {
-    Query: {
-      getAllData: (_, __, context) => {
-        if(!context.user) throw new Error("Not auth");
-        return data;
-      },
+  Query: {
+    login: (_, { input }) => {
+      const user = userMethods.checkCred(input.email, input.password);
+      if (!user) {
+        return { message: "Invalid credentials" };
+      }
+      return user;
     },
-    Mutation : {
-        login : (_, {userName, password}) => {
-          const existingUser = users.find(u => u.userName === userName && u.password === password);
-          if(!existingUser) throw new Error("Wrong username or password");
-          const token = jwt.sign({userName , password}, SECRET_KEY, {
-            expiresIn : "1h"
-          });
-          return token;
-        }
-    }
-  };
-
+  },
+  LoginResult: {
+    __resolveType(obj) {
+      if (obj.message) {
+        return "LoginError";
+      }
+      return "User";
+    },
+  },
+};
 
 const server = new ApolloServer({
-    typeDefs,
-    resolvers,
-  });
+  typeDefs,
+  resolvers,
+});
 
-  const { url } = await startStandaloneServer(server, {
-    listen: { port: 4000 },
-    context : async ({req}) => {
+const { url } = await startStandaloneServer(server, {
+  listen: { port: 4000 },
+});
 
-      if(req.body.operationName === "Login") return;
-
-      const token = req.headers.authorization;
-
-      let user = null;
-      if(token){
-
-        try {
-        user = jwt.verify(token.replace("Bearer ", ""), SECRET_KEY);
-        } catch (e) {
-          console.log(e);
-          throw new Error(e.message);
-        }
-      }
-      return {user};
-    }
-  });
-  
-  console.log(`🚀  Server ready at: ${url}`);
+console.log(`🚀 Server ready at: ${url}`);
