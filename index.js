@@ -1,14 +1,35 @@
 import { ApolloServer } from "@apollo/server";
 import { startStandaloneServer } from "@apollo/server/standalone";
-import { userMethods } from "./db.js"; // Importing userMethods
+import { postMethods, userMethods } from "./db.js";
 
 const typeDefs = ` 
     type Query {
+       test(input: Credentials!): LoginResult
+    }
+
+    type Mutation {
       login(input: Credentials!): LoginResult
+      createPost(input: PostInput): Post
+    }
+
+    input PostInput {
+      userId : ID
+      postTitle : String
+      postDesc : String
+      postImage : String
+    }
+
+    type Post {
+        id : ID,
+        userId : ID,
+        postImage : String,
+        postTitle : String,
+        postDesc : String,
+        likes : [Int],
     }
 
     input Credentials {
-      email: String!
+      userEmail: String!
       password: String!
     }
 
@@ -20,7 +41,7 @@ const typeDefs = `
     
     type User {
       id: ID!
-      email: String!
+      userEmail: String!
       password: String!
       followers: [User]
       following: [User]
@@ -29,15 +50,8 @@ const typeDefs = `
 `;
 
 const resolvers = {
-  Query: {
-    login: (_, { input }) => {
-      const user = userMethods.checkCred(input.email, input.password);
-      if (!user) {
-        return { message: "Invalid credentials" };
-      }
-      return user;
-    },
-  },
+  Query: {},
+
   LoginResult: {
     __resolveType(obj) {
       if (obj.message) {
@@ -46,6 +60,21 @@ const resolvers = {
       return "User";
     },
   },
+
+  Mutation: {
+    login: (_, { input }) => {
+      const user = userMethods.checkCred(input);
+      if (!user) {
+        return { message: "Invalid credentials" };
+      }
+      return user;
+    },
+
+    createPost: (_, { input }) => {
+      const newPost = postMethods.createPost(input)
+      return newPost
+    }
+  }
 };
 
 const server = new ApolloServer({
